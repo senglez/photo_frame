@@ -54,17 +54,51 @@
     sections.forEach(function (s) { if (s) navObs.observe(s); });
   }
 
-  /* Scroll reveals, once per section */
+  /* Scroll reveals, once per element.
+     Cards inside a [data-stagger] grid enter one after another along each row. */
+  var STAGGER_STEP = 80; /* ms between cards in the same row */
+  var STAGGER_MAX = 400; /* cap so wide rows never feel slow */
+
+  /* Position of a card within its visual row (0, 1, 2...). Works for any column count. */
+  var columnIndex = function (el) {
+    var grid = el.parentElement;
+    if (!grid || !grid.hasAttribute("data-stagger")) return 0;
+    var top = el.offsetTop;
+    var col = 0;
+    for (var sib = el.previousElementSibling; sib; sib = sib.previousElementSibling) {
+      if (Math.abs(sib.offsetTop - top) < 2) col++;
+      else break;
+    }
+    return col;
+  };
+
+  /* After the entrance finishes, drop the reveal classes so hover styles take over. */
+  var settle = function (el) {
+    var done = function (e) {
+      if (e.target !== el || e.propertyName !== "transform") return;
+      el.removeEventListener("transitionend", done);
+      el.style.transitionDelay = "";
+      el.classList.remove("reveal", "in");
+    };
+    el.addEventListener("transitionend", done);
+  };
+
   var reveals = document.querySelectorAll(".reveal");
   if ("IntersectionObserver" in window && !reduceMotion) {
     var obs = new IntersectionObserver(function (entries) {
       entries.forEach(function (en) {
-        if (en.isIntersecting) { en.target.classList.add("in"); obs.unobserve(en.target); }
+        if (!en.isIntersecting) return;
+        var el = en.target;
+        var delay = Math.min(columnIndex(el) * STAGGER_STEP, STAGGER_MAX);
+        if (delay) el.style.transitionDelay = delay + "ms";
+        settle(el);
+        el.classList.add("in");
+        obs.unobserve(el);
       });
     }, { threshold: 0.12 });
     reveals.forEach(function (el) { obs.observe(el); });
   } else {
-    reveals.forEach(function (el) { el.classList.add("in"); });
+    reveals.forEach(function (el) { el.classList.remove("reveal"); });
   }
 
   /* Tagline: each word lights up as it crosses a trigger line */
